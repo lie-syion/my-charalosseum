@@ -1,4 +1,0 @@
-# 사이트 버전(docs/)은 의존성이 없습니다 — 브라우저만 있으면 됩니다.
-# 아래는 터미널 버전(python run.py --cli)과 build_static.py 용입니다.
-anthropic>=0.40.0
-rich>=13.0.0
