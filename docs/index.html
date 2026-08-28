@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AEGIS — AI 캐릭터 대전 시뮬레이터</title>
+<meta name="description" content="캐릭터를 만들고 전장과 디버프를 고르면, AI 심판이 라운드마다 전투를 판정하고 서술합니다.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⚔</text></svg>">
+</head>
+<body>
+
+<div id="toast-wrap"></div>
+
+<!-- ══════════════════════════════════ 타이틀 ══════════════════════════════════ -->
+<section class="screen active" id="screen-title">
+  <button class="gear" id="btn-settings" title="설정">⚙</button>
+  <div class="title-inner">
+    <div class="brand">
+      <div class="brand-mark">⚔</div>
+      <h1>AEGIS</h1>
+      <p class="brand-sub">AI 심판이 굴리는 캐릭터 대전 · 전쟁 시뮬레이터</p>
+    </div>
+    <nav class="menu">
+      <button class="menu-item" data-go="setup">
+        <span class="mi-key">01</span>
+        <span class="mi-body"><b>싱글 플레이</b><i>혼자서 전투를 굴린다 · 내 API 키 사용</i></span>
+      </button>
+      <button class="menu-item" data-go="lobby">
+        <span class="mi-key">02</span>
+        <span class="mi-body"><b>멀티 플레이</b><i>방 코드로 친구와 대전 · 심판 키는 한 명 것만 있으면 됨</i></span>
+      </button>
+      <button class="menu-item" data-go="roster">
+        <span class="mi-key">03</span>
+        <span class="mi-body"><b>캐릭터 로스터</b><i>시트를 만들고 다듬는다</i></span>
+      </button>
+      <button class="menu-item" data-go="saved">
+        <span class="mi-key">04</span>
+        <span class="mi-body"><b>저장된 전투</b><i>지난 설정을 그대로 다시 굴린다</i></span>
+      </button>
+    </nav>
+    <div class="title-foot">
+      <span id="mode-badge" class="badge">—</span>
+      <span class="dim" id="mode-note">라운드마다 AI 심판이 판정합니다</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ 로스터 ══════════════════════════════════ -->
+<section class="screen" id="screen-roster">
+  <header class="bar">
+    <button class="ghost-btn" data-go="title">← 메인</button>
+    <h2>캐릭터 로스터</h2>
+    <div class="bar-actions">
+      <button class="btn subtle" id="btn-ai-char">AI로 생성</button>
+      <button class="btn subtle" id="btn-import-char">불러오기</button>
+      <button class="btn" id="btn-new-char">+ 새 캐릭터</button>
+    </div>
+  </header>
+  <div class="scroll">
+    <div class="grid" id="roster-grid"></div>
+    <p class="empty" id="roster-empty">아직 캐릭터가 없습니다. 오른쪽 위에서 만들어 주세요.</p>
+  </div>
+</section>
+
+<!-- ═════════════════════════════════ 저장된 전투 ═════════════════════════════ -->
+<section class="screen" id="screen-saved">
+  <header class="bar">
+    <button class="ghost-btn" data-go="title">← 메인</button>
+    <h2>저장된 전투 설정</h2>
+    <div class="bar-actions"></div>
+  </header>
+  <div class="scroll">
+    <div class="list" id="saved-list"></div>
+    <p class="empty" id="saved-empty">저장된 전투 설정이 없습니다.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ 로비 ═══════════════════════════════════ -->
+<section class="screen" id="screen-lobby">
+  <header class="bar">
+    <button class="ghost-btn" data-go="title">← 메인</button>
+    <h2>멀티 플레이</h2>
+    <div class="bar-actions"><span id="lobby-status" class="badge">연결 안 됨</span></div>
+  </header>
+  <div class="scroll">
+
+    <!-- 입장 전 -->
+    <div id="lobby-entry">
+      <div class="lobby-split">
+        <div class="card lobby-card">
+          <h4>방 만들기</h4>
+          <p>내가 방장이 됩니다. 전투 설정을 정하고 전투를 진행합니다.
+             기본적으로 <b>내 API 키</b>로 판정이 돌아갑니다.</p>
+          <div class="f"><label>표시할 이름</label><input id="host-nick" placeholder="닉네임"></div>
+          <button class="btn" id="btn-create-room">방 만들기</button>
+        </div>
+        <div class="card lobby-card">
+          <h4>방 참가하기</h4>
+          <p>방장에게 받은 코드를 넣으세요. <b>키가 없어도</b> 참가할 수 있습니다
+             — 판정은 심판 담당이 자기 키로 돌립니다.</p>
+          <div class="f2">
+            <div class="f"><label>표시할 이름</label><input id="join-nick" placeholder="닉네임"></div>
+            <div class="f"><label>방 코드</label><input id="join-code" class="mono code-input" placeholder="ABC12" maxlength="6"></div>
+          </div>
+          <button class="btn" id="btn-join-room">참가</button>
+        </div>
+      </div>
+      <p class="dim sm note-p2p">브라우저끼리 직접 연결됩니다(P2P). 서버에 대화나 키가 저장되지 않습니다.
+        회사·학교 방화벽에서는 연결이 막힐 수 있습니다.</p>
+    </div>
+
+    <!-- 입장 후 -->
+    <div id="lobby-room" class="hidden">
+      <div class="room-head">
+        <div>
+          <div class="dim sm">방 코드</div>
+          <div class="room-code mono" id="room-code">—</div>
+        </div>
+        <button class="btn subtle sm" id="btn-copy-code">초대 링크 복사</button>
+        <div class="grow"></div>
+        <button class="btn subtle sm" id="btn-leave-room">방 나가기</button>
+      </div>
+
+      <h3 class="sec">참가자</h3>
+      <div class="list" id="party-list"></div>
+
+      <div id="guest-panel" class="hidden">
+        <h3 class="sec">내 캐릭터</h3>
+        <p class="dim sm" id="guest-slot-hint">방장이 전투 형식을 정하면 몇 명을 낼 수 있는지 표시됩니다.</p>
+        <div class="slot-list" id="guest-slots"></div>
+        <div class="row-actions">
+          <button class="btn subtle" id="btn-guest-pick">캐릭터 고르기</button>
+          <button class="btn" id="btn-guest-submit">제출</button>
+        </div>
+        <label class="check"><input type="checkbox" id="guest-offer-key">
+          <span>내 API 키로 판정을 맡을 수 있음 <i>(방장이 심판을 넘길 때 후보가 됩니다)</i></span></label>
+      </div>
+
+      <div id="host-panel" class="hidden">
+        <h3 class="sec">판정 담당 <span class="hint">API 호출을 실제로 돌리는 사람</span></h3>
+        <select id="judge-select"></select>
+        <div class="row-actions">
+          <button class="btn" id="btn-host-setup">전투 설정하기</button>
+        </div>
+        <p class="dim sm" id="host-hint">참가자가 캐릭터를 제출하면 진영에 자동으로 배치됩니다.</p>
+      </div>
+
+      <div id="guest-wait" class="hidden">
+        <p class="empty">방장이 전투를 준비하고 있습니다…</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════════════ 전투 설정 ═══════════════════════════════ -->
+<section class="screen" id="screen-setup">
+  <header class="bar">
+    <button class="ghost-btn" id="setup-back">← 뒤로</button>
+    <h2>전투 설정</h2>
+    <div class="bar-actions"><span class="step-count" id="step-count"></span></div>
+  </header>
+
+  <div class="steps" id="step-rail"></div>
+
+  <div class="scroll">
+    <div class="step-page" data-step="0">
+      <h3 class="sec">전투 형식</h3>
+      <div class="grid pick-grid" id="scale-grid"></div>
+      <div class="inline-field hidden" id="royale-count-field">
+        <label>참전 진영 수</label>
+        <input type="number" id="royale-count" min="3" max="6" value="3">
+      </div>
+    </div>
+
+    <div class="step-page" data-step="1">
+      <h3 class="sec">진영 편성 <span class="hint" id="force-hint"></span></h3>
+      <div class="forces-setup" id="forces-setup"></div>
+    </div>
+
+    <div class="step-page" data-step="2">
+      <h3 class="sec">전장</h3>
+      <div class="grid pick-grid" id="env-grid"></div>
+      <div class="custom-row">
+        <input type="text" id="env-custom-name" placeholder="직접 입력 — 전장 이름">
+        <input type="text" id="env-custom-desc" placeholder="설명 (이 지형이 전투에 어떻게 개입하는가)">
+      </div>
+    </div>
+
+    <div class="step-page" data-step="3">
+      <h3 class="sec">전장 변수 · 디버프 <span class="hint">여러 개 선택 가능</span></h3>
+      <div class="grid pick-grid dense" id="mod-grid"></div>
+      <div class="custom-row">
+        <input type="text" id="mod-custom-name" placeholder="직접 추가 — 변수 이름">
+        <input type="text" id="mod-custom-desc" placeholder="설명">
+        <button class="btn subtle" id="mod-add">추가</button>
+      </div>
+    </div>
+
+    <div class="step-page" data-step="4">
+      <h3 class="sec">서술 톤</h3>
+      <div class="grid pick-grid" id="tone-grid"></div>
+
+      <div class="opt-row">
+        <div class="opt"><label>묘사 수위</label><div class="seg" id="intensity-seg"></div></div>
+        <div class="opt"><label>라운드당 분량</label><div class="seg" id="detail-seg"></div></div>
+      </div>
+
+      <div class="opt-row">
+        <div class="opt"><label>승리 조건</label><select id="victory-select"></select></div>
+        <div class="opt"><label>최대 라운드 <b id="rounds-out" class="mono">8</b></label>
+          <input type="range" id="max-rounds" min="1" max="20" value="8"></div>
+      </div>
+
+      <div class="opt full">
+        <label>추가 규칙 · 상황 설정 <span class="hint">선택</span></label>
+        <textarea id="extra-rules" rows="3" placeholder="예: 두 사람은 원래 사제지간이다. 카이엔은 상대를 죽일 생각이 없다."></textarea>
+      </div>
+
+      <label class="check"><input type="checkbox" id="interactive" checked>
+        <span>라운드 사이에 개입할 수 있게 한다 <i>(난입·조건 추가)</i></span></label>
+    </div>
+  </div>
+
+  <footer class="setup-foot">
+    <button class="btn subtle" id="step-prev">이전</button>
+    <div class="setup-summary" id="setup-summary"></div>
+    <button class="btn" id="step-next">다음</button>
+  </footer>
+</section>
+
+<!-- ══════════════════════════════════ 전투 ═══════════════════════════════════ -->
+<section class="screen" id="screen-battle">
+  <div class="hud">
+    <div class="hud-top">
+      <button class="ghost-btn" id="btn-quit">← 나가기</button>
+      <div class="hud-meta">
+        <span id="hud-env" class="dim"></span>
+        <span class="round-pill"><b id="hud-round">0</b><i>/<span id="hud-max">8</span></i></span>
+        <span id="hud-role" class="badge hidden"></span>
+      </div>
+      <button class="ghost-btn" id="btn-detail">전장 정보</button>
+    </div>
+    <div class="forces" id="force-bars"></div>
+  </div>
+
+  <div class="log-wrap" id="log-wrap">
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="controls" id="controls">
+    <button class="btn big" id="btn-next">다음 라운드</button>
+    <button class="btn subtle" id="btn-intervene">개입</button>
+    <button class="btn subtle" id="btn-auto">자동 진행</button>
+    <button class="btn subtle" id="btn-save-log">기록 내려받기</button>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ 모달 ═══════════════════════════════════ -->
+<div class="overlay" id="overlay"></div>
+
+<!-- 설정 -->
+<div class="modal" id="modal-settings">
+  <header><h3>설정</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body">
+    <div class="f">
+      <label>Anthropic API 키</label>
+      <div class="key-row">
+        <input id="s-key" type="password" placeholder="sk-ant-...">
+        <button class="btn subtle sm" id="btn-key-toggle">보기</button>
+      </div>
+      <p class="dim sm key-note">이 브라우저에만 저장되고 어디로도 전송되지 않습니다.
+        요청은 브라우저에서 Anthropic 서버로 직접 갑니다.
+        키는 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>에서 발급합니다.</p>
+      <p class="dim sm">키를 넣지 않으면 <b>체험 모드</b>로 돌아갑니다 — 화면과 흐름은 전부 그대로 보이고,
+        서술 자리에는 자리표시자가 출력됩니다.</p>
+    </div>
+    <div class="f2">
+      <div class="f"><label>모델</label><input id="s-model" placeholder="claude-sonnet-4-5"></div>
+      <div class="f"><label>라운드당 최대 토큰</label><input id="s-tokens" type="number" min="500" max="16000" step="500"></div>
+    </div>
+    <div class="f"><label>멀티에서 표시할 이름</label><input id="s-nick" placeholder="닉네임"></div>
+  </div>
+  <footer>
+    <button class="btn subtle" id="btn-key-clear">키 지우기</button>
+    <button class="btn" id="btn-settings-save">저장</button>
+  </footer>
+</div>
+
+<!-- 캐릭터 편집기 -->
+<div class="modal wide" id="modal-char">
+  <header><h3 id="char-modal-title">새 캐릭터</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body">
+    <div class="f2">
+      <div class="f"><label>이름 *</label><input id="c-name" placeholder="카이엔"></div>
+      <div class="f"><label>이명 · 칭호</label><input id="c-title" placeholder="잿빛 검성"></div>
+    </div>
+    <div class="f"><label>한 줄 컨셉</label><input id="c-concept" placeholder="한 번의 발도로 승부를 끝내려는 늙은 검객"></div>
+    <div class="f2">
+      <div class="f"><label>외형</label><input id="c-appearance"></div>
+      <div class="f"><label>성격</label><input id="c-personality"></div>
+    </div>
+    <div class="f2">
+      <div class="f"><label>전투 스타일</label><input id="c-style" placeholder="어떻게 싸우는가"></div>
+      <div class="f narrow"><label>전력 등급</label><input id="c-tier" value="B" placeholder="E~SS"></div>
+    </div>
+    <div class="f">
+      <label>능력 <span class="hint">대가/제약이 있어야 심판이 공정하게 굴립니다</span></label>
+      <div id="ability-list"></div>
+      <button class="btn subtle sm" id="btn-add-ability">+ 능력 추가</button>
+    </div>
+    <div class="f"><label>장비 <span class="hint">쉼표로 구분</span></label><input id="c-equipment"></div>
+    <div class="f2">
+      <div class="f"><label>강점 <span class="hint">쉼표</span></label><input id="c-strengths"></div>
+      <div class="f"><label>약점 <span class="hint">쉼표 · 구체적일수록 좋습니다</span></label><input id="c-weaknesses"></div>
+    </div>
+    <div class="f"><label>기타 설정</label><textarea id="c-notes" rows="2"></textarea></div>
+  </div>
+  <footer>
+    <button class="btn subtle" id="btn-export-char">JSON 내려받기</button>
+    <button class="btn subtle" data-close>취소</button>
+    <button class="btn" id="btn-save-char">저장</button>
+  </footer>
+</div>
+
+<!-- AI 캐릭터 생성 -->
+<div class="modal" id="modal-ai">
+  <header><h3>AI로 캐릭터 시트 생성</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body">
+    <div class="f"><label>컨셉</label>
+      <textarea id="ai-concept" rows="3" placeholder="복수를 위해 자기 그림자를 판 전직 성기사"></textarea></div>
+    <div class="f"><label>추가 요구사항 <span class="hint">선택</span></label>
+      <input id="ai-extra" placeholder="근접 전투형으로, 약점은 물과 관련되게"></div>
+    <p class="dim sm">생성된 시트는 저장 전에 편집기에서 손볼 수 있습니다.</p>
+  </div>
+  <footer>
+    <button class="btn subtle" data-close>취소</button>
+    <button class="btn" id="btn-ai-go">생성</button>
+  </footer>
+</div>
+
+<!-- 캐릭터 선택 -->
+<div class="modal wide" id="modal-pick">
+  <header><h3 id="pick-title">캐릭터 배치</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body">
+    <div class="grid pick-chars" id="pick-grid"></div>
+    <p class="empty sm" id="pick-empty">로스터가 비어 있습니다. 먼저 캐릭터를 만들어 주세요.</p>
+  </div>
+  <footer><button class="btn" data-close>완료</button></footer>
+</div>
+
+<!-- 개입 -->
+<div class="modal" id="modal-inject">
+  <header><h3>전장에 개입</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body">
+    <div class="f"><label>무슨 일이 벌어집니까?</label>
+      <textarea id="inject-text" rows="3" placeholder="성벽이 무너지고 지하에서 야수 무리가 쏟아져 나온다"></textarea></div>
+    <p class="dim sm">심판이 이 사건을 다음 라운드에 녹입니다. 판정의 공정성은 그대로 유지됩니다.</p>
+  </div>
+  <footer>
+    <button class="btn subtle" data-close>취소</button>
+    <button class="btn" id="btn-inject-go">개입하고 진행</button>
+  </footer>
+</div>
+
+<!-- 전장 정보 -->
+<div class="modal wide" id="modal-detail">
+  <header><h3>전장 정보</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body" id="detail-body"></div>
+  <footer><button class="btn" data-close>닫기</button></footer>
+</div>
+
+<!-- 전투 설정 저장 -->
+<div class="modal" id="modal-savepreset">
+  <header><h3>이 전투 설정 저장</h3><button class="x" data-close>✕</button></header>
+  <div class="modal-body">
+    <div class="f"><label>이름</label><input id="preset-name"></div>
+  </div>
+  <footer>
+    <button class="btn subtle" id="btn-savepreset-skip">저장 없이 시작</button>
+    <button class="btn" id="btn-savepreset-go">저장하고 시작</button>
+  </footer>
+</div>
+
+<!-- 결과 -->
+<div class="modal result" id="modal-result">
+  <div class="result-inner">
+    <div class="result-tag" id="result-tag">전투 종료</div>
+    <h2 id="result-winner">—</h2>
+    <p id="result-reason" class="dim"></p>
+    <div class="result-actions">
+      <button class="btn" id="btn-epilogue">전후 정리 · 심판 총평</button>
+      <button class="btn subtle" id="btn-result-close">기록 계속 보기</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-import" accept=".json" class="hidden">
+
+<script src="data.js"></script>
+<script src="prompts.js"></script>
+<script src="engine.js"></script>
+<script src="store.js"></script>
+<script src="net.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
