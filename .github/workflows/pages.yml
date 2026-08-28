@@ -1,32 +1,43 @@
- ```yaml
-   name: Deploy AEGIS to Pages
+# docs/ 폴더를 그대로 GitHub Pages 로 올린다.
+# Jekyll 을 전혀 거치지 않으므로 SCSS/테마 관련 빌드 오류가 나지 않는다.
+#
+# 저장소 → Settings → Pages → Source 를 "GitHub Actions" 로 바꿔 두면
+# main 에 푸시할 때마다 이 워크플로가 배포한다.
 
-   on:
-     push:
-       branches: [main, master]
-     workflow_dispatch:
+name: Deploy AEGIS to Pages
 
-   permissions:
-     contents: read
-     pages: write
-     id-token: write
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
 
-   concurrency:
-     group: pages
-     cancel-in-progress: true
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
-   jobs:
-     deploy:
-       runs-on: ubuntu-latest
-       environment:
-         name: github-pages
-         url: ${{ steps.deployment.outputs.page_url }}
-       steps:
-         - uses: actions/checkout@v4
-         - uses: actions/configure-pages@v5
-         - uses: actions/upload-pages-artifact@v3
-           with:
-             path: docs
-         - id: deployment
-           uses: actions/deploy-pages@v4
-   ```
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+
+      - name: Pages 설정
+        uses: actions/configure-pages@v5
+
+      - name: docs/ 를 통째로 업로드
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: 배포
+        id: deployment
+        uses: actions/deploy-pages@v4
